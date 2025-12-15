@@ -19,7 +19,7 @@ import pandas as pd
 
 # 環境変数
 SOURCE_BUCKET = os.environ.get('SOURCE_BUCKET', 'data-daily-scraiping-choka')
-DEST_BUCKET = os.environ.get('DEST_BUCKET', 'fishing-catch-predictor')
+DEST_BUCKET = os.environ.get('DEST_BUCKET', 'inference-choka')
 FACILITY = os.environ.get('FACILITY', 'honmoku')
 AWS_REGION = os.environ.get('AWS_REGION', 'ap-northeast-1')
 
