@@ -17,7 +17,7 @@ from predictor.inference import FishingPredictor
 
 
 # 環境変数
-S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'fishing-catch-predictor')
+S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'inference-choka')
 S3_DATA_KEY = os.environ.get('S3_DATA_KEY', 'data/fishing_data.csv')
 S3_MODEL_KEY = os.environ.get('S3_MODEL_KEY', 'models/model_cv.pkl')
 S3_CONFIG_KEY = os.environ.get('S3_CONFIG_KEY', 'models/config.json')
