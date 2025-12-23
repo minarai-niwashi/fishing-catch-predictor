@@ -50,3 +50,9 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+# Python Packaging
+*package
+
+# Archives
+*.zip
