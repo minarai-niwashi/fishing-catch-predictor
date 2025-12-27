@@ -16,10 +16,9 @@ from typing import Optional, Tuple
 import boto3
 import pandas as pd
 
-
 # 環境変数
 SOURCE_BUCKET = os.environ.get('SOURCE_BUCKET', 'data-daily-scraiping-choka')
-DEST_BUCKET = os.environ.get('DEST_BUCKET', 'inference-choka')
+DEST_BUCKET = os.environ.get('DEST_BUCKET', 'fishing-catch-predictor')
 FACILITY = os.environ.get('FACILITY', 'honmoku')
 AWS_REGION = os.environ.get('AWS_REGION', 'ap-northeast-1')
 
