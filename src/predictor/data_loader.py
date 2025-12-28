@@ -152,39 +152,3 @@ class S3DataLoader:
         config = self.load_config(config_key=config_key)
 
         return df, model, config
-
-
-def upload_data_to_s3(
-    df: pd.DataFrame,
-    bucket_name: str,
-    key: str = 'data/fishing_data.csv',
-    region_name: str = 'ap-northeast-1'
-) -> None:
-    """
-    データフレームをS3にアップロード（データ更新用）
-
-    Args:
-        df: アップロードするDataFrame
-        bucket_name: S3バケット名
-        key: S3オブジェクトキー
-        region_name: AWSリージョン
-
-    Raises:
-        Exception: S3アップロードエラー
-    """
-    try:
-        s3_client = boto3.client('s3', region_name=region_name)
-
-        # DataFrameをCSVに変換
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False)
-
-        # S3にアップロード
-        s3_client.put_object(
-            Bucket=bucket_name,
-            Key=key,
-            Body=csv_buffer.getvalue()
-        )
-
-    except Exception as e:
-        raise Exception(f"Failed to upload data to S3: {str(e)}")
