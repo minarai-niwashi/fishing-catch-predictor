@@ -22,8 +22,6 @@ fishing-catch-predictor/
 │       ├── __init__.py
 │       ├── main.py             # 日次更新ハンドラ
 │       └── initial_setup.py    # 初回セットアップ
-├── requirements.txt            # Python依存パッケージ
-├── Dockerfile                  # Lambda用Dockerイメージ
 ├── .gitignore
 └── README.md
 ```
