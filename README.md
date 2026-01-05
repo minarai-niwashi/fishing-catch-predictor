@@ -20,7 +20,7 @@ fishing-catch-predictor/
 │   │   └── main.py             # Lambda handler（予測）
 │   └── data_updater/           # データ更新Lambda関数
 │       ├── __init__.py
-│       ├── main.py             # 日次更新ハンドラ
+│       ├── updater.py             # 日次更新ハンドラ
 │       └── initial_setup.py    # 初回セットアップ
 ├── .gitignore
 └── README.md
