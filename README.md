@@ -31,5 +31,5 @@ fishing-catch-predictor/
 | 関数名 | 目的 | ハンドラー |
 |--------|------|-----------|
 | **fishing-catch-predictor** | 翌日釣果の予測 | `src.lambda_function.main.lambda_handler` |
-| **fishing-data-updater** | 前日分データの追加 | `src.data_updater.main.lambda_handler` |
+| **fishing-data-updater** | 前日分データの追加 | `src.data_updater.updater.lambda_handler` |
 | **fishing-data-initial-setup** | 全履歴データの初期取り込み | `src.data_updater.initial_setup.lambda_handler` |
