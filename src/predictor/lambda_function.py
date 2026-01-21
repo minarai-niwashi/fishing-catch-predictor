@@ -42,6 +42,12 @@ def lambda_handler(event, context):
             'risk_level': result['risk_level']
         }
 
+        # 予測結果をS3に保存
+        loader.save_prediction(
+            prediction_date=prediction['date'],
+            predicted_catch=prediction['predicted_catch']
+        )
+
         # SNS でメール送信
         if sns_topic_arn:
             _send_notification(sns_topic_arn, prediction)
