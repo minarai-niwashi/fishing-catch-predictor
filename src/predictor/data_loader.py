@@ -152,3 +152,53 @@ class S3DataLoader:
         config = self.load_config(config_key=config_key)
 
         return df, model, config
+
+    def save_prediction(
+        self,
+        prediction_date: str,
+        predicted_catch: float,
+        key: str = 'predictions/predictions.csv'
+    ) -> None:
+        """
+        予測結果をS3にCSV形式で保存する
+
+        既存のCSVがあれば追記、なければ新規作成する
+
+        Args:
+            prediction_date: 予測対象日 (YYYY-MM-DD)
+            predicted_catch: 予測釣果（匹/人）
+            key: S3オブジェクトキー
+
+        Raises:
+            Exception: S3保存エラー
+        """
+        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        new_row = pd.DataFrame([{
+            'prediction_date': prediction_date,
+            'predicted_catch': predicted_catch,
+            'created_at': created_at
+        }])
+
+        try:
+            # 既存のCSVを読み込む
+            response = self.s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=key
+            )
+            existing_df = pd.read_csv(io.BytesIO(response['Body'].read()))
+            df = pd.concat([existing_df, new_row], ignore_index=True)
+        except self.s3_client.exceptions.NoSuchKey:
+            # ファイルが存在しない場合は新規作成
+            df = new_row
+
+        # CSVに変換してS3に保存
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+
+        self.s3_client.put_object(
+            Bucket=self.bucket_name,
+            Key=key,
+            Body=csv_buffer.getvalue(),
+            ContentType='text/csv'
+        )
