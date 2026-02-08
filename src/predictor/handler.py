@@ -136,7 +136,7 @@ def _send_notification(topic_arn: str, prediction: dict):
 
 def _format_recent_records(records: list) -> str:
     """直近の実績データをテキストテーブル形式にフォーマット"""
-    header = "  日付        来場者   アジ釣果  匹/人"
+    header = "  日付        来場者  アジ釣果  匹/人"
     separator = "  ----------  ------  --------  -----"
     lines = [header, separator]
     for r in records:
