@@ -37,21 +37,26 @@ def lambda_handler(event, context):
         predictor = FishingPredictor(model=model, config=config)
         result = predictor.predict_tomorrow(historical_data=historical_data)
 
-        # 最新日の実績データを取得
-        latest = historical_data.iloc[-1]
-        latest_date = latest['date'].strftime('%Y-%m-%d')
-        latest_visitors = int(latest['visitors'])
-        latest_aji_count = int(latest['aji_count'])
-        latest_catch_per_person = latest_aji_count / latest_visitors if latest_visitors > 0 else 0
+        # 直近7日分の実績データを取得
+        recent_days = 7
+        recent_data = historical_data.tail(recent_days)
+        recent_records = []
+        for _, row in recent_data.iterrows():
+            visitors = int(row['visitors'])
+            aji_count = int(row['aji_count'])
+            catch_per_person = aji_count / visitors if visitors > 0 else 0
+            recent_records.append({
+                'date': row['date'].strftime('%Y-%m-%d'),
+                'visitors': visitors,
+                'aji_count': aji_count,
+                'catch_per_person': round(catch_per_person, 2)
+            })
 
         prediction = {
             'date': result['prediction_date'],
             'predicted_catch': round(result['conservative_prediction'], 2),
             'risk_level': result['risk_level'],
-            'latest_date': latest_date,
-            'latest_visitors': latest_visitors,
-            'latest_aji_count': latest_aji_count,
-            'latest_catch_per_person': round(latest_catch_per_person, 2)
+            'recent_records': recent_records
         }
 
         # 予測結果をS3に保存
@@ -94,6 +99,9 @@ def _send_notification(topic_arn: str, prediction: dict):
     # メール件名
     subject = f"【釣果予測】{prediction['date']} の予測結果"
 
+    # 直近7日分の実績テーブルを作成
+    records_table = _format_recent_records(prediction['recent_records'])
+
     # メール本文
     message = f"""
 明日の釣果予測をお届けします。
@@ -111,11 +119,8 @@ def _send_notification(topic_arn: str, prediction: dict):
 {_get_recommendation(prediction)}
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
-📊 直近の実績 ({prediction['latest_date']})
-   来場者数: {prediction['latest_visitors']:,} 人
-   アジ釣果数: {prediction['latest_aji_count']:,} 匹
-   1人あたり: {prediction['latest_catch_per_person']:.2f} 匹/人
-
+📊 直近7日間の実績
+{records_table}
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
 ※ この予測は過去データに基づく参考値です。
@@ -127,6 +132,19 @@ def _send_notification(topic_arn: str, prediction: dict):
         Subject=subject,
         Message=message
     )
+
+
+def _format_recent_records(records: list) -> str:
+    """直近の実績データをテキストテーブル形式にフォーマット"""
+    header = "  日付        来場者   アジ釣果  匹/人"
+    separator = "  ----------  ------  --------  -----"
+    lines = [header, separator]
+    for r in records:
+        lines.append(
+            f"  {r['date']}  {r['visitors']:>6,}  {r['aji_count']:>8,}"
+            f"  {r['catch_per_person']:>5.2f}"
+        )
+    return '\n'.join(lines)
 
 
 def _get_risk_display(risk_level: int) -> dict:
