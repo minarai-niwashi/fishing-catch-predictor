@@ -1,5 +1,8 @@
-# 実験用フォルダ（GitHub管理外）
-fish_model/
+# GitHub管理外
+data/
+src/trainer/
+models/
+.claude/
 
 # Python
 __pycache__/
@@ -43,6 +46,7 @@ Thumbs.db
 
 # AWS
 .aws-sam/
+samconfig.toml
 
 # Logs
 *.log
