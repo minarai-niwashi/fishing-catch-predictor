@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 釣果予測システム - データ更新と予測配信
+
+Parameters:
+  SourceBucketName:
+    Type: String
+    Default: data-daily-scraiping-choka
+    Description: スクレイピングデータのS3バケット名
+  DestBucketName:
+    Type: String
+    Default: fishing-catch-predictor
+    Description: 予測システム用S3バケット名
+  SnsTopicArn:
+    Type: String
+    Description: 既存のSNSトピックARN
+
+Globals:
+  Function:
+    Timeout: 900
+    MemorySize: 512
+    Architectures:
+      - x86_64
+
+Resources:
+  # --- Data Updater (S3イベント駆動、施設ごとに起動) ---
+  DataUpdaterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Environment:
+        Variables:
+          SOURCE_BUCKET: !Ref SourceBucketName
+          DEST_BUCKET: !Ref DestBucketName
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref SourceBucketName
+        - S3CrudPolicy:
+            BucketName: !Ref DestBucketName
+    Metadata:
+      DockerTag: data-updater
+      DockerContext: ./src/data_updater
+      Dockerfile: Dockerfile
+
+  # S3バケットへのLambda呼び出し許可 (honmoku)
+  DataUpdaterPermissionHonmoku:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DataUpdaterFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:s3:::${SourceBucketName}
+
+  # S3バケットへのLambda呼び出し許可 (daikoku)
+  DataUpdaterPermissionDaikoku:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DataUpdaterFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:s3:::${SourceBucketName}
+
+  # --- Initial Setup (手動実行のみ) ---
+  InitialSetupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      ImageConfig:
+        Command:
+          - initial_setup.lambda_handler
+      MemorySize: 1024
+      Environment:
+        Variables:
+          SOURCE_BUCKET: !Ref SourceBucketName
+          DEST_BUCKET: !Ref DestBucketName
+          FACILITIES: honmoku,daikoku
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref SourceBucketName
+        - S3CrudPolicy:
+            BucketName: !Ref DestBucketName
+    Metadata:
+      DockerTag: initial-setup
+      DockerContext: ./src/data_updater
+      Dockerfile: Dockerfile
+
+  # --- Predictor (EventBridge スケジュール駆動) ---
+  PredictorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      MemorySize: 1024
+      Environment:
+        Variables:
+          S3_BUCKET_NAME: !Ref DestBucketName
+          SNS_TOPIC_ARN: !Ref SnsTopicArn
+          FACILITIES: honmoku,daikoku
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DestBucketName
+        - S3CrudPolicy:
+            BucketName: !Ref DestBucketName
+        - Statement:
+            - Effect: Allow
+              Action: sns:Publish
+              Resource: !Ref SnsTopicArn
+      Events:
+        DailyPredict:
+          Type: Schedule
+          Properties:
+            Schedule: cron(30 12 * * ? *)
+            Description: 毎日 JST 21:30 に釣果予測を実行
+    Metadata:
+      DockerTag: predictor
+      DockerContext: ./src/predictor
+      Dockerfile: Dockerfile
+
+Outputs:
+  DataUpdaterFunctionArn:
+    Description: Data Updater Lambda ARN
+    Value: !GetAtt DataUpdaterFunction.Arn
+  InitialSetupFunctionArn:
+    Description: Initial Setup Lambda ARN
+    Value: !GetAtt InitialSetupFunction.Arn
+  PredictorFunctionArn:
+    Description: Predictor Lambda ARN
+    Value: !GetAtt PredictorFunction.Arn
+  SnsTopicArn:
+    Description: SNS Topic ARN
+    Value: !Ref SnsTopicArn

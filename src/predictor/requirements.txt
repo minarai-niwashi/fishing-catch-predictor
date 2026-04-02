@@ -1,0 +1,5 @@
+boto3
+lightgbm
+numpy
+pandas
+scikit-learn
