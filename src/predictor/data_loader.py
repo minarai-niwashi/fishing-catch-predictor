@@ -56,6 +56,23 @@ class S3DataLoader:
 
         return {"model": model, "config": config}
 
+    def load_predictions(self, facility: str) -> pd.DataFrame:
+        """施設の予測履歴を S3 から読み込む (未作成なら空 DataFrame)."""
+        key = f"predictions/{facility}/predictions.csv"
+        try:
+            response = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
+        except self.s3_client.exceptions.NoSuchKey:
+            return pd.DataFrame(
+                columns=["prediction_date", "predicted_catch", "go_decision", "created_at"]
+            )
+
+        df = pd.read_csv(io.BytesIO(response["Body"].read()))
+        df["prediction_date"] = pd.to_datetime(df["prediction_date"])
+        df["go_decision"] = (
+            df["go_decision"].astype(str).str.lower().map({"true": True, "false": False})
+        )
+        return df
+
     def save_prediction(
         self,
         facility: str,

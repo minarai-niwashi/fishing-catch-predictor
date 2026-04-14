@@ -5,12 +5,17 @@
 """
 
 import os
+from datetime import timedelta
 
 import boto3
+import pandas as pd
 from data_loader import S3DataLoader
 from facility_config import FACILITIES
 
 from predictor import FishingPredictor
+
+ACCURACY_PERIOD_DAYS = 14
+ACTUAL_GO_THRESHOLD = 1.0
 
 
 def lambda_handler(event, context):
@@ -89,6 +94,16 @@ def _predict_facility(loader: S3DataLoader, facility: str) -> dict:
     result["latest_aji_count"] = latest_aji_count
     result["latest_catch_per_person"] = round(latest_catch_per_person, 2)
 
+    # 直近の Go 判定的中率
+    try:
+        predictions_df = loader.load_predictions(facility=facility)
+        hits, total = _compute_go_accuracy(predictions_df, historical_data)
+    except Exception as e:
+        print(f"Warning: {fac_config['display_name']} の精度計算に失敗: {e}")
+        hits, total = 0, 0
+    result["accuracy_hits"] = hits
+    result["accuracy_total"] = total
+
     # 予測結果を S3 に保存
     loader.save_prediction(
         facility=facility,
@@ -98,6 +113,58 @@ def _predict_facility(loader: S3DataLoader, facility: str) -> dict:
     )
 
     return result
+
+
+def _compute_go_accuracy(
+    predictions_df: pd.DataFrame,
+    historical_df: pd.DataFrame,
+    period_days: int = ACCURACY_PERIOD_DAYS,
+) -> tuple[int, int]:
+    """直近 period_days 日の Go 判定的中数と母数を返す.
+
+    - 母数: 実績データ (visitors > 0) と予測が両方存在する日
+    - 的中: 予測 go_decision == (実績 aji_count / visitors >= 1.0)
+    """
+    if predictions_df.empty or historical_df.empty:
+        return 0, 0
+
+    base_date = historical_df["date"].max().date()
+    start_date = base_date - timedelta(days=period_days - 1)
+
+    actual = historical_df[
+        (historical_df["date"].dt.date >= start_date)
+        & (historical_df["date"].dt.date <= base_date)
+        & (historical_df["visitors"] > 0)
+    ].copy()
+    if actual.empty:
+        return 0, 0
+    actual["actual_go"] = (actual["aji_count"] / actual["visitors"]) >= ACTUAL_GO_THRESHOLD
+
+    preds = (
+        predictions_df.sort_values("created_at")
+        .drop_duplicates("prediction_date", keep="last")
+    )
+
+    merged = actual.merge(
+        preds[["prediction_date", "go_decision"]],
+        left_on="date",
+        right_on="prediction_date",
+        how="inner",
+    )
+    merged = merged.dropna(subset=["go_decision"])
+    if merged.empty:
+        return 0, 0
+
+    hits = int((merged["go_decision"] == merged["actual_go"]).sum())
+    total = int(len(merged))
+    return hits, total
+
+
+def _format_accuracy(hits: int, total: int) -> str:
+    if total == 0:
+        return "0/0"
+    pct = round(hits / total * 100)
+    return f"{hits}/{total} ({pct}%)"
 
 
 def _send_notification(topic_arn: str, results: dict):
@@ -138,6 +205,7 @@ def _send_notification(topic_arn: str, results: dict):
         else:
             decision_text = "❌ 見送り: 今回は見送りが無難です。"
 
+        accuracy_text = _format_accuracy(r["accuracy_hits"], r["accuracy_total"])
         section = (
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏠 {display_name}\n"
@@ -149,6 +217,9 @@ def _send_notification(topic_arn: str, results: dict):
             f"   来場者数: {r['latest_visitors']:,} 人\n"
             f"   アジ釣果数: {r['latest_aji_count']:,} 匹\n"
             f"   1人あたり: {r['latest_catch_per_person']:.2f} 匹/人\n"
+            f"\n"
+            f"🎯 予測精度 (直近{ACCURACY_PERIOD_DAYS}日)\n"
+            f"   Go判定的中率: {accuracy_text}\n"
         )
         sections.append(section)
 
