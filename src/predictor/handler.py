@@ -122,8 +122,8 @@ def _compute_go_accuracy(
 ) -> tuple[int, int]:
     """直近 period_days 日の Go 判定的中数と母数を返す.
 
-    - 母数: 実績データ (visitors > 0) と予測が両方存在する日
-    - 的中: 予測 go_decision == (実績 aji_count / visitors >= 1.0)
+    - 母数: 予測が Go だった日のうち、実績データ (visitors > 0) が存在する日
+    - 的中: 実績 aji_count / visitors >= 1.0 (実績も Go)
     """
     if predictions_df.empty or historical_df.empty:
         return 0, 0
@@ -152,11 +152,12 @@ def _compute_go_accuracy(
         how="inner",
     )
     merged = merged.dropna(subset=["go_decision"])
-    if merged.empty:
+    go_predicted = merged[merged["go_decision"]]
+    if go_predicted.empty:
         return 0, 0
 
-    hits = int((merged["go_decision"] == merged["actual_go"]).sum())
-    total = int(len(merged))
+    hits = int(go_predicted["actual_go"].sum())
+    total = int(len(go_predicted))
     return hits, total
 
 
