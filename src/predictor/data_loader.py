@@ -79,6 +79,8 @@ class S3DataLoader:
         prediction_date: str,
         predicted_catch: float,
         go_decision: bool,
+        model_version: str,
+        model_trained_at: str,
     ) -> None:
         """予測結果を S3 に CSV 形式で保存する."""
         key = f"predictions/{facility}/predictions.csv"
@@ -89,6 +91,8 @@ class S3DataLoader:
             "predicted_catch": predicted_catch,
             "go_decision": go_decision,
             "created_at": created_at,
+            "model_version": model_version,
+            "model_trained_at": model_trained_at,
         }])
 
         try:

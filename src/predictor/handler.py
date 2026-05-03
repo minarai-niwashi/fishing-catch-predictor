@@ -104,11 +104,14 @@ def _predict_facility(loader: S3DataLoader, facility: str) -> dict:
     result["accuracy_span_days"] = span_days
 
     # 予測結果を S3 に保存
+    config = artifacts["config"]
     loader.save_prediction(
         facility=facility,
         prediction_date=result["prediction_date"],
         predicted_catch=result["predicted_catch"],
         go_decision=result["go_decision"],
+        model_version=config.get("model_type", "lgbm_regressor"),
+        model_trained_at=config.get("trained_at", ""),
     )
 
     return result
