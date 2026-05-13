@@ -92,16 +92,24 @@ def _predict_facility(loader: S3DataLoader, facility: str) -> dict:
     result["latest_aji_count"] = latest_aji_count
     result["latest_catch_per_person"] = round(latest_catch_per_person, 2)
 
-    # 全期間の Go 判定的中率
+    # 全期間の Go 判定の適合率・再現率
     try:
         predictions_df = loader.load_predictions(facility=facility)
-        hits, total, span_days = _compute_go_accuracy(predictions_df, historical_data)
+        metrics = _compute_go_accuracy(predictions_df, historical_data)
     except Exception as e:
         print(f"Warning: {fac_config['display_name']} の精度計算に失敗: {e}")
-        hits, total, span_days = 0, 0, 0
-    result["accuracy_hits"] = hits
-    result["accuracy_total"] = total
-    result["accuracy_span_days"] = span_days
+        metrics = {
+            "precision_hits": 0,
+            "precision_total": 0,
+            "recall_hits": 0,
+            "recall_total": 0,
+            "span_days": 0,
+        }
+    result["precision_hits"] = metrics["precision_hits"]
+    result["precision_total"] = metrics["precision_total"]
+    result["recall_hits"] = metrics["recall_hits"]
+    result["recall_total"] = metrics["recall_total"]
+    result["accuracy_span_days"] = metrics["span_days"]
 
     # 予測結果を S3 に保存
     config = artifacts["config"]
@@ -120,15 +128,23 @@ def _predict_facility(loader: S3DataLoader, facility: str) -> dict:
 def _compute_go_accuracy(
     predictions_df: pd.DataFrame,
     historical_df: pd.DataFrame,
-) -> tuple[int, int, int]:
-    """全期間の Go 判定的中数・母数・予測期間のカレンダー日数を返す.
+) -> dict:
+    """全期間の Go 判定の適合率・再現率と予測期間日数を返す.
 
-    - 母数: 予測が Go だった日のうち、実績データ (visitors > 0) が存在する日
-    - 的中: 実績 aji_count / visitors >= 1.0 (実績も Go)
+    - TP (両指標の分子): 予測 Go かつ 実績 Go (aji_count / visitors >= 1.0)
+    - 適合率の母数: 予測が Go だった日のうち、実績データ (visitors > 0) が存在する日
+    - 再現率の母数: 実績が Go だった日のうち、予測が存在する日
     - 期間日数: 最初の予測日から最新予測日までのカレンダー日数
     """
+    empty = {
+        "precision_hits": 0,
+        "precision_total": 0,
+        "recall_hits": 0,
+        "recall_total": 0,
+        "span_days": 0,
+    }
     if predictions_df.empty or historical_df.empty:
-        return 0, 0, 0
+        return empty
 
     preds = (
         predictions_df.sort_values("created_at")
@@ -140,7 +156,7 @@ def _compute_go_accuracy(
 
     actual = historical_df[historical_df["visitors"] > 0].copy()
     if actual.empty:
-        return 0, 0, span_days
+        return {**empty, "span_days": span_days}
     actual["actual_go"] = (actual["aji_count"] / actual["visitors"]) >= ACTUAL_GO_THRESHOLD
 
     merged = actual.merge(
@@ -150,13 +166,20 @@ def _compute_go_accuracy(
         how="inner",
     )
     merged = merged.dropna(subset=["go_decision"])
-    go_predicted = merged[merged["go_decision"]]
-    if go_predicted.empty:
-        return 0, 0, span_days
+    if merged.empty:
+        return {**empty, "span_days": span_days}
 
-    hits = int(go_predicted["actual_go"].sum())
-    total = int(len(go_predicted))
-    return hits, total, span_days
+    tp = int((merged["go_decision"] & merged["actual_go"]).sum())
+    predicted_go = int(merged["go_decision"].sum())
+    actual_go = int(merged["actual_go"].sum())
+
+    return {
+        "precision_hits": tp,
+        "precision_total": predicted_go,
+        "recall_hits": tp,
+        "recall_total": actual_go,
+        "span_days": span_days,
+    }
 
 
 def _format_accuracy(hits: int, total: int) -> str:
@@ -204,7 +227,8 @@ def _send_notification(topic_arn: str, results: dict):
         else:
             decision_text = "❌ 見送り: 今回は見送りが無難です。"
 
-        accuracy_text = _format_accuracy(r["accuracy_hits"], r["accuracy_total"])
+        precision_text = _format_accuracy(r["precision_hits"], r["precision_total"])
+        recall_text = _format_accuracy(r["recall_hits"], r["recall_total"])
         section = (
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏠 {display_name}\n"
@@ -218,7 +242,8 @@ def _send_notification(topic_arn: str, results: dict):
             f"   1人あたり: {r['latest_catch_per_person']:.2f} 匹/人\n"
             f"\n"
             f"🎯 予測精度 (全{r['accuracy_span_days']}日)\n"
-            f"   Go判定的中率: {accuracy_text}\n"
+            f"   適合率: {precision_text}\n"
+            f"   再現率: {recall_text}\n"
         )
         sections.append(section)
 
