@@ -1,8 +1,23 @@
-"""predictor 配下の Lambda モジュールをインポート可能にする."""
+"""predictor 配下の Lambda モジュールをインポート可能にする.
+
+predictor / data_updater で同名モジュール (facility_config) を持つので、
+各テスト実行前に sys.path と sys.modules を整える。
+"""
 
 import sys
 from pathlib import Path
 
+import pytest
+
 PREDICTOR_SRC = Path(__file__).resolve().parents[2] / "src" / "predictor"
-if str(PREDICTOR_SRC) not in sys.path:
-    sys.path.insert(0, str(PREDICTOR_SRC))
+DATA_UPDATER_SRC = Path(__file__).resolve().parents[2] / "src" / "data_updater"
+
+
+@pytest.fixture(autouse=True)
+def _isolate_predictor_path():
+    sys.path[:] = [p for p in sys.path if p != str(DATA_UPDATER_SRC)]
+    for mod in ("facility_config", "external_data", "updater", "initial_setup"):
+        sys.modules.pop(mod, None)
+    if str(PREDICTOR_SRC) not in sys.path:
+        sys.path.insert(0, str(PREDICTOR_SRC))
+    yield
