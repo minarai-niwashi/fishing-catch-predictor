@@ -59,10 +59,9 @@ def lambda_handler(event, context):
         }
 
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": {"error": str(e)},
-        }
+        # 例外はログに残した上で再 raise する。
+        print(f"ERROR: 予測処理でエラーが発生しました: {str(e)}")
+        raise
 
 
 def _predict_facility(loader: S3DataLoader, facility: str) -> dict:

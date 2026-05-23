@@ -13,7 +13,10 @@ Parameters:
     Description: 予測システム用S3バケット名
   SnsTopicArn:
     Type: String
-    Description: 既存のSNSトピックARN
+    Description: 予測結果配信用のSNSトピックARN
+  AlertSnsTopicArn:
+    Type: String
+    Description: Lambda失敗アラート用のSNSトピックARN
 
 Globals:
   Function:
@@ -116,6 +119,45 @@ Resources:
       DockerTag: predictor
       DockerContext: ./src/predictor
       Dockerfile: Dockerfile
+
+  # --- CloudWatch Alarms (Lambda 失敗検知) ---
+  PredictorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-PredictorFunction-Errors"
+      AlarmDescription: Predictor Lambda がエラーで終了した
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PredictorFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertSnsTopicArn
+
+  DataUpdaterErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-DataUpdaterFunction-Errors"
+      AlarmDescription: DataUpdater Lambda がエラーで終了した
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DataUpdaterFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertSnsTopicArn
 
 Outputs:
   DataUpdaterFunctionArn:

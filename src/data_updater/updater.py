@@ -16,7 +16,6 @@ from typing import Optional, Tuple
 
 import boto3
 import pandas as pd
-
 from external_data import enrich_missing_external_data
 from facility_config import FACILITIES as FACILITY_CONFIGS
 
@@ -342,12 +341,6 @@ def lambda_handler(event, context):
         }
 
     except Exception as e:
-        error_message = f"データ更新でエラーが発生しました: {str(e)}"
-        print(f"ERROR: {error_message}")
-
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': error_message
-            }, ensure_ascii=False, indent=2)
-        }
+        # 例外はログに残した上で再 raise する。
+        print(f"ERROR: データ更新でエラーが発生しました: {str(e)}")
+        raise
