@@ -106,22 +106,3 @@ flowchart LR
 ※ この予測は過去データに基づく参考値です。
 ※ 天候や海況により実際の釣果は変動します。
 ```
-
-## セットアップ
-
-### 前提条件
-
-- AWS アカウント / AWS CLI 設定済み
-- Docker
-- Python 3.12+, uv
-- SAM CLI
-
-### デプロイ
-
-```bash
-# 依存関係インストール
-uv sync
-
-# ビルド & デプロイ
-sam build && sam deploy
-```
