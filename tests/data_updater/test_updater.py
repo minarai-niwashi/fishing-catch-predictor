@@ -15,22 +15,34 @@ def updater_module():
 
 # ----------------- _extract_facility_from_s3_event -----------------
 
+def _make_eventbridge_event(key: str) -> dict:
+    """EventBridge 経由の S3 Object Created イベントを組み立てる."""
+    return {
+        "source": "aws.s3",
+        "detail-type": "Object Created",
+        "detail": {
+            "bucket": {"name": "data-daily-scraiping-choka"},
+            "object": {"key": key},
+        },
+    }
+
+
 def test_extract_facility_honmoku(updater_module):
-    event = {"Records": [{"s3": {"object": {"key": "data/honmoku/2026-04-23/body.csv"}}}]}
+    event = _make_eventbridge_event("data/honmoku/2026-04-23/body.csv")
     facility, target_date = updater_module._extract_facility_from_s3_event(event)
     assert facility == "honmoku"
     assert target_date == datetime(2026, 4, 23)
 
 
 def test_extract_facility_daikoku(updater_module):
-    event = {"Records": [{"s3": {"object": {"key": "data/daikoku/2025-12-31/head.csv"}}}]}
+    event = _make_eventbridge_event("data/daikoku/2025-12-31/body.csv")
     facility, target_date = updater_module._extract_facility_from_s3_event(event)
     assert facility == "daikoku"
     assert target_date == datetime(2025, 12, 31)
 
 
 def test_extract_facility_invalid_key_raises(updater_module):
-    event = {"Records": [{"s3": {"object": {"key": "random/path/file.txt"}}}]}
+    event = _make_eventbridge_event("random/path/file.txt")
     with pytest.raises(ValueError, match="S3キーから施設名を抽出できません"):
         updater_module._extract_facility_from_s3_event(event)
 

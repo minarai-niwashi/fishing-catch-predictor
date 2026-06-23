@@ -26,7 +26,7 @@ Globals:
       - x86_64
 
 Resources:
-  # --- Data Updater (S3イベント駆動、施設ごとに起動) ---
+  # --- Data Updater (EventBridge 経由の S3 イベント駆動、施設ごとに起動) ---
   DataUpdaterFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -40,30 +40,27 @@ Resources:
             BucketName: !Ref SourceBucketName
         - S3CrudPolicy:
             BucketName: !Ref DestBucketName
+      Events:
+        S3BodyPut:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - aws.s3
+              detail-type:
+                - Object Created
+              detail:
+                bucket:
+                  name:
+                    - !Ref SourceBucketName
+                object:
+                  key:
+                    - wildcard: "data/honmoku*body.csv"
+                    - wildcard: "data/daikoku*body.csv"
     Metadata:
       DockerTag: data-updater
       DockerContext: ./src/data_updater
       Dockerfile: Dockerfile
-
-  # S3バケットへのLambda呼び出し許可 (honmoku)
-  DataUpdaterPermissionHonmoku:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref DataUpdaterFunction
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Sub arn:aws:s3:::${SourceBucketName}
-
-  # S3バケットへのLambda呼び出し許可 (daikoku)
-  DataUpdaterPermissionDaikoku:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref DataUpdaterFunction
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Sub arn:aws:s3:::${SourceBucketName}
 
   # --- Initial Setup (手動実行のみ) ---
   InitialSetupFunction:
