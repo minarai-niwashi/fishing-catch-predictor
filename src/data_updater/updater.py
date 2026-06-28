@@ -2,9 +2,9 @@
 """
 fishing_data.csv更新Lambda関数
 
-data-daily-scraiping-chokaバケットのS3イベント（ObjectCreated:Put）をトリガーに、
-該当施設のfishing_data.csvを増分更新する。
-S3イベントのキーから施設名を自動判別し、1施設ずつ処理する。
+data-daily-scraiping-choka バケットの S3 Object Created イベントを EventBridge 経由で
+受け取り、該当施設の fishing_data.csv を増分更新する。
+EventBridge イベントの detail.object.key から施設名を自動判別し、1施設ずつ処理する。
 """
 
 import io
@@ -242,12 +242,13 @@ def save_fishing_data(s3_client, bucket: str, df: pd.DataFrame, facility: str) -
 
 
 def _extract_facility_from_s3_event(event: dict) -> Tuple[str, Optional[datetime]]:
-    """S3イベントからfacility名と日付を抽出する.
+    """EventBridge 経由の S3 イベントから facility 名と日付を抽出する.
 
     S3キーの形式: data/{facility}/{YYYY-MM-DD}/body.csv
+    EventBridge イベント形式: event['detail']['object']['key']
 
     Args:
-        event: S3イベント
+        event: EventBridge イベント (source: aws.s3, detail-type: Object Created)
 
     Returns:
         tuple: (施設名, 日付 or None)
@@ -255,8 +256,7 @@ def _extract_facility_from_s3_event(event: dict) -> Tuple[str, Optional[datetime
     Raises:
         ValueError: S3キーから施設名を抽出できない場合
     """
-    record = event['Records'][0]
-    s3_key = record['s3']['object']['key']
+    s3_key = event['detail']['object']['key']
     print(f"  S3キー: {s3_key}")
 
     # data/{facility}/{YYYY-MM-DD}/body.csv からパース
@@ -275,15 +275,15 @@ def lambda_handler(event, context):
     """
     Lambda関数のエントリーポイント
 
-    S3イベント（ObjectCreated:Put）をトリガーに、
-    該当施設のfishing_data.csvを増分更新する。
+    EventBridge 経由の S3 イベント (source: aws.s3, detail-type: Object Created)
+    をトリガーに、該当施設の fishing_data.csv を増分更新する。
 
     環境変数:
         SOURCE_BUCKET: スクレイピングデータのバケット (default: data-daily-scraiping-choka)
         DEST_BUCKET: 保存先バケット (default: fishing-catch-predictor)
 
     Args:
-        event: S3イベント（Records[0].s3.object.key から施設名と日付を取得）
+        event: EventBridge イベント (detail.object.key から施設名と日付を取得)
         context: Lambda コンテキスト
 
     Returns:
@@ -294,7 +294,7 @@ def lambda_handler(event, context):
         print("fishing_data.csv 増分更新")
         print("=" * 80)
 
-        # S3イベントから施設名と日付を抽出
+        # EventBridge イベントから施設名と日付を抽出
         facility, target_date = _extract_facility_from_s3_event(event)
 
         if facility not in FACILITY_CONFIGS:

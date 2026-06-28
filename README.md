@@ -25,7 +25,8 @@ flowchart LR
     end
 
     subgraph データ更新 Lambda
-        B -->|S3イベント| C[DataUpdater]
+        B -->|S3 Put イベント| EB[EventBridge]
+        EB --> C[DataUpdater]
         C -->|API 取得| D[Open-Meteo<br/>気象・海洋]
         C -->|API 取得| E[月齢 / 祝日]
         C -->|CSV 蓄積| F[(S3<br/>予測システム用データ)]
