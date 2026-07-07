@@ -118,3 +118,43 @@ def test_parse_daily_data_returns_none_when_head_empty(updater_module):
     s3 = _make_s3_client({"data/honmoku/2026-04-23/head.csv": head_csv})
     result = updater_module.parse_daily_data(s3, "bucket", "honmoku", datetime(2026, 4, 23))
     assert result is None
+
+
+# ----------------- update_fishing_data が使う日付が JST 基準か -----------------
+
+def test_update_fishing_data_uses_jst_yesterday_when_target_none(updater_module, monkeypatch):
+    # 日本が 7/2 の朝 6:00 の瞬間を再現する (このとき UTC はまだ 7/1 の 21:00)。
+    # target_date を渡さないときの「昨日」は、JST 基準なら 7/1。
+    # UTC で計算すると今日を 7/1 と誤認し、その昨日 = 6/30 を取りにいってしまう。
+    from datetime import datetime as real_dt  # noqa: PLC0415
+    from datetime import timezone  # noqa: PLC0415
+
+    fixed_utc = real_dt(2026, 7, 1, 21, 0, tzinfo=timezone.utc)
+
+    class _Frozen(real_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_utc.astimezone(tz) if tz is not None else fixed_utc.replace(tzinfo=None)
+
+    monkeypatch.setattr(updater_module, "datetime", _Frozen)
+
+    # 既存 fishing_data.csv 無し (NoSuchKey) → 新規作成パス
+    s3 = MagicMock()
+    s3.exceptions.NoSuchKey = type("NoSuchKey", (Exception,), {})
+    s3.get_object.side_effect = s3.exceptions.NoSuchKey()
+
+    seen_dates = []
+
+    def _fake_parse(s3c, bucket, facility, date_obj):
+        seen_dates.append(date_obj)
+        return None  # 当日データ無し扱い
+
+    monkeypatch.setattr(updater_module, "parse_daily_data", _fake_parse)
+
+    _df, rows_added = updater_module.update_fishing_data(
+        s3, "src-bucket", "dst-bucket", "honmoku", target_date=None
+    )
+
+    assert rows_added == 0
+    assert seen_dates, "parse_daily_data が呼ばれていない"
+    assert seen_dates[0].date() == real_dt(2026, 7, 1).date()  # JST 基準の昨日 (7/1)

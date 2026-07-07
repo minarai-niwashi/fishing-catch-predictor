@@ -3,12 +3,16 @@
 学習済みの LightGBM 回帰モデルを使って翌日の 釣行判定 を予測する。
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import numpy as np
 import pandas as pd
 from features import create_features
+
+# 日本標準時 (UTC+9)。Lambda は指定しないと UTC で動くため、日付を求めるときは
+# この JST を使う (使わないと日本の日付と 1 日ズレることがある)。
+JST = timezone(timedelta(hours=9))
 
 
 class FishingPredictor:
@@ -41,7 +45,7 @@ class FishingPredictor:
             dict: {prediction_date, predicted_catch, go_decision, threshold}
         """
         if target_date is None:
-            target_date = datetime.now().date() + timedelta(days=1)
+            target_date = datetime.now(JST).date() + timedelta(days=1)
         else:
             target_date = target_date + timedelta(days=1)
 
