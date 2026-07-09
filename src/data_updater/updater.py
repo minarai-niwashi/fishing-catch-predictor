@@ -11,13 +11,17 @@ import io
 import json
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
 import boto3
 import pandas as pd
 from external_data import enrich_missing_external_data
 from facility_config import FACILITIES as FACILITY_CONFIGS
+
+# 日本標準時 (UTC+9)。Lambda は指定しないと UTC で動くため、日付を求めるときは
+# この JST を使う (使わないと日本の日付と 1 日ズレることがある)。
+JST = timezone(timedelta(hours=9))
 
 # 環境変数
 SOURCE_BUCKET = os.environ.get('SOURCE_BUCKET', 'data-daily-scraiping-choka')
@@ -167,7 +171,7 @@ def update_fishing_data(
 
     # 更新対象日を決定
     if target_date is None:
-        target_date = datetime.now().date() - timedelta(days=1)
+        target_date = datetime.now(JST).date() - timedelta(days=1)
     else:
         target_date = target_date.date()
 

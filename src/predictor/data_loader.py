@@ -6,11 +6,15 @@
 import io
 import json
 import pickle
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import boto3
 import pandas as pd
+
+# 日本標準時 (UTC+9)。Lambda は指定しないと UTC で動くため、日付や時刻を求めるときは
+# この JST を使う (使わないと日本の日付と 1 日ズレることがある)。
+JST = timezone(timedelta(hours=9))
 
 
 class S3DataLoader:
@@ -33,7 +37,7 @@ class S3DataLoader:
         df = df.sort_values("date").reset_index(drop=True)
 
         if days is not None:
-            start_date = datetime.now().date() - timedelta(days=days)
+            start_date = datetime.now(JST).date() - timedelta(days=days)
             df = df[df["date"].dt.date >= start_date].copy()
 
         return df
@@ -84,7 +88,7 @@ class S3DataLoader:
     ) -> None:
         """予測結果を S3 に CSV 形式で保存する."""
         key = f"predictions/{facility}/predictions.csv"
-        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        created_at = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
 
         new_row = pd.DataFrame([{
             "prediction_date": prediction_date,
